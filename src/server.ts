@@ -26,7 +26,7 @@ app.use((req: Request, res: Response, next: any) => {
     // - www-authenticate: parsed by extractPaymentOptions4 → paymentOptions with protocol "x402"
     res.set('X-Payment-Protocol', 'x402');
     res.set('X402-Payment', 'required');
-    res.set('Payment-Required', 'eyJ4NDAyVmVyc2lvbiI6IDIsICJhY2NlcHRzIjogW3sibmV0d29yayI6ICJiYXNlIiwgImFzc2V0IjogIlVTREMiLCAiYW1vdW50IjogIjAuMTAiLCAic2NoZW1lIjogImV4YWN0IiwgInBheVRvIjogIjB4NzQ1N2MzOEVlNjMwNmQ2OThDOTRCMjM5MTQ3MjRGNzRDOEU2ZTBEQiJ9XSwgIndhbGxldCI6ICIweDc0NTdjMzhFZTYzMDZkNjk4Qzk0QjIzOTE0NzI0Rjc0QzhFNmUwREIiLCAiZmFjaWxpdGF0b3IiOiAiaHR0cHM6Ly94NDAyc2Nhbi5jb20vZmFjaWxpdGF0b3IifQ==');
+    res.set('Payment-Required', 'eyJ4ND...IifQ==');
     const accepts = [
       {
         network: 'base',
@@ -43,6 +43,11 @@ app.use((req: Request, res: Response, next: any) => {
       wallet: WALLET,
       facilitator: 'https://x402scan.com/facilitator',
     });
+  }
+
+  // Payment received → record sale
+  if (req.path.startsWith('/api/') || req.path === '/mcp') {
+    recordSale(req.method, req.path, req.headers['user-agent']);
   }
   next();
 });
@@ -489,10 +494,35 @@ app.get('/api/wallet', (_req: Request, res: Response) => {
   });
 });
 
+// ─── In-Memory Sale Tracker ────────────────────────────────────
+const saleHistory: Array<{ method: string; path: string; timestamp: string; ua?: string }> = [];
+const MAX_SALES = 200;
+
+function recordSale(method: string, path: string, userAgent?: string) {
+  saleHistory.push({ method, path, timestamp: new Date().toISOString(), ua: userAgent?.substring(0, 80) });
+  if (saleHistory.length > MAX_SALES) saleHistory.shift();
+}
+
+app.get('/api/sales', (_req: Request, res: Response) => {
+  const summary = {
+    total: saleHistory.length,
+    revenue_usdc: saleHistory.reduce((sum, s) => {
+      const prices: Record<string, number> = { signals: 0.02, risk: 0.02, forecast: 0.02, decision: 0.10, preflight: 0.03, audit: 0.05, 'automations/run': 0.01, mcp: 0 };
+      for (const [key, price] of Object.entries(prices)) { if (s.path.includes(key)) return sum + price; }
+      return sum;
+    }, 0),
+    recent: saleHistory.slice(-50).reverse(),
+  };
+  res.json(summary);
+});
+
+// Patch the middleware to also record to history (replaces console.log)
+// Note: the console.log in the middleware already logs; this endpoint reads from memory
+
 app.listen(PORT, () => {
   console.log(`Kronos X402 v${VERSION} running on port ${PORT}`);
   console.log(`Wallet: ${WALLET}`);
   console.log(`MCP: http://localhost:${PORT}/mcp`);
-  console.log(`API: http://localhost:${PORT}/api/{preflight,decision,audit,signals,risk,forecast,automations,agent-types,wallet}`);
+  console.log(`API: http://localhost:${PORT}/api/{preflight,decision,audit,signals,risk,forecast,automations,agent-types,wallet,sales}`);
   console.log(`X402 Config: http://localhost:${PORT}/x402-config`);
 });
