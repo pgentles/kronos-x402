@@ -152,6 +152,56 @@ app.post('/x402/facilitate', express.json(), (req: Request, res: Response) => {
 });
 
 // ─── MCP Endpoint ──────────────────────────────────────────────
+// ─── OpenAPI Discovery (.well-known/openapi.json) ─────────────
+app.get('/.well-known/openapi.json', (_req: Request, res: Response) => {
+  res.json({
+    openapi: '3.0.0',
+    info: {
+      title: 'Kronos X402 - AI Market Intelligence API',
+      version: '1.1.0',
+      description: 'Professional crypto market intelligence for AI agents'
+    },
+    servers: [{ url: 'https://kronos-x402.onrender.com' }],
+    paths: {
+      '/mcp': {
+        post: {
+          summary: 'MCP JSON-RPC endpoint',
+          operationId: 'mcp',
+          responses: { '200': { description: 'OK' } }
+        }
+      },
+      '/x402/discover': {
+        get: {
+          summary: 'X402 service discovery',
+          operationId: 'discover',
+          responses: { '200': { description: 'OK' } }
+        }
+      },
+      '/api/signals': {
+        get: {
+          summary: 'Market signals',
+          operationId: 'get_signals',
+          responses: { '402': { description: 'Payment Required' }, '200': { description: 'OK' } }
+        }
+      },
+      '/api/risk': {
+        get: {
+          summary: 'Risk assessment',
+          operationId: 'get_risk',
+          responses: { '402': { description: 'Payment Required' }, '200': { description: 'OK' } }
+        }
+      },
+      '/api/forecast': {
+        get: {
+          summary: 'Price forecast',
+          operationId: 'get_forecast',
+          responses: { '402': { description: 'Payment Required' }, '200': { description: 'OK' } }
+        }
+      }
+    }
+  });
+});
+
 app.post('/mcp', async (req: Request, res: Response) => {
   const mcp: any = { jsonrpc: '2.0', id: req.body.id };
 
