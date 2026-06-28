@@ -19,18 +19,29 @@ app.use((req: Request, res: Response, next: any) => {
 
   const payment = req.headers['x402-payment'];
   if (!payment) {
+    // Standard 402 Payment Required — x402 v2 protocol
+    // @agentcash/discovery requires: x402Version: 2, network, asset, amount in accepts
+    // detectProtocols checks x-payment-protocol header for "x402"
+    res.set('X-Payment-Protocol', 'x402');
+    res.set('X402-Payment', 'required');
     return res.status(402).json({
-      x402: {
-        accepts: [{
-          scheme: 'exact',
-          network: 'base',
-          maxPrice: '0.10',
-          resource: `https://${req.headers.host}${req.path}`,
-          description: 'Kronos X402 - Agent API access',
-        }],
-        wallet: WALLET,
-        facilitator: 'https://x402scan.com/facilitator',
-      }
+      x402Version: 2,
+      ...(req.path === '/.well-known/x402.json' || req.path === '/openapi.json'
+        ? {}
+        : {
+            accepts: [
+              {
+                network: 'base',
+                asset: 'USDC',
+                amount: '0.10',
+                scheme: 'exact',
+                payTo: WALLET,
+                resource: `https://${req.headers.host}${req.path}`,
+              }
+            ],
+            wallet: WALLET,
+            facilitator: 'https://x402scan.com/facilitator',
+          })
     });
   }
   next();
