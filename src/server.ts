@@ -25,7 +25,7 @@ app.use((req: Request, res: Response, next: any) => {
     // - www-authenticate: parsed by extractPaymentOptions4 → paymentOptions with protocol "x402"
     res.set('X-Payment-Protocol', 'x402');
     res.set('X402-Payment', 'required');
-    res.set('WWW-Authenticate', 'Payment scheme="exact", network="base", asset="USDC", amount="0.10"');
+    res.set('Payment-Required', 'eyJ4NDAyVmVyc2lvbiI6IDIsICJhY2NlcHRzIjogW3sibmV0d29yayI6ICJiYXNlIiwgImFzc2V0IjogIlVTREMiLCAiYW1vdW50IjogIjAuMTAiLCAic2NoZW1lIjogImV4YWN0IiwgInBheVRvIjogIjB4NzQ1N2MzOEVlNjMwNmQ2OThDOTRCMjM5MTQ3MjRGNzRDOEU2ZTBEQiJ9XSwgIndhbGxldCI6ICIweDc0NTdjMzhFZTYzMDZkNjk4Qzk0QjIzOTE0NzI0Rjc0QzhFNmUwREIiLCAiZmFjaWxpdGF0b3IiOiAiaHR0cHM6Ly94NDAyc2Nhbi5jb20vZmFjaWxpdGF0b3IifQ==');
     const accepts = [
       {
         network: 'base',
