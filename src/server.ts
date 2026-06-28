@@ -15,7 +15,7 @@ app.use(express.json({ limit: '256kb' }));
 
 // ─── X402 Protocol ─────────────────────────────────────────────
 app.use((req: Request, res: Response, next: any) => {
-  if (req.path === '/' || req.path === '/health' || req.path === '/x402-config' || req.path === '/.well-known/x402.json' || req.path === '/x402/discover') return next();
+  if (req.path === '/' || req.path === '/health' || req.path === '/x402-config' || req.path === '/.well-known/x402.json' || req.path === '/x402/discover' || req.path === '/x402' || req.path === '/x402/facilitate') return next();
 
   const payment = req.headers['x402-payment'];
   if (!payment) {
@@ -118,6 +118,36 @@ app.post('/x402/register', express.json(), (req: Request, res: Response) => {
     name,
     network: 'base',
     registered_at: new Date().toISOString(),
+  });
+});
+
+// ─── X402 /x402 Route (main protocol endpoint) ─────────────────
+app.get('/x402', (_req: Request, res: Response) => {
+  res.json({
+    x402: {
+      accepts: [
+        {
+          scheme: 'exact',
+          network: 'base',
+          maxPrice: '0.10',
+          resource: 'https://kronos-x402.onrender.com/x402',
+          description: 'Kronos X402 - Agent API access'
+        }
+      ],
+      wallet: WALLET,
+      facilitator: 'https://x402scan.com/facilitator'
+    }
+  });
+});
+
+app.post('/x402/facilitate', express.json(), (req: Request, res: Response) => {
+  const { payment, resource } = req.body;
+  // Simple facilitator - accepts any payment and returns success
+  res.json({
+    status: 'accepted',
+    payment: payment,
+    resource: resource,
+    timestamp: new Date().toISOString()
   });
 });
 
