@@ -203,7 +203,7 @@ app.get('/openapi.json', (_req: Request, res: Response) => {
         }
       },
       '/api/signals': {
-        get: {
+        post: {
           operationId: 'get_signals',
           summary: 'Get raw market signals for crypto assets',
           tags: ['Market Intelligence'],
@@ -211,15 +211,20 @@ app.get('/openapi.json', (_req: Request, res: Response) => {
             price: { mode: 'fixed', currency: 'USD', amount: '0.020000' },
             protocols: [{ x402: {} }]
           },
-          parameters: [
-            {
-              name: 'symbol',
-              in: 'query',
-              required: true,
-              schema: { type: 'string' },
-              description: 'Crypto symbol (e.g., BTC, ETH)'
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    symbol: { type: 'string', description: 'Crypto symbol (e.g., BTC, ETH)', examples: ['BTC'] }
+                  },
+                  required: ['symbol']
+                }
+              }
             }
-          ],
+          },
           responses: {
             '200': {
               description: 'Successful signals response',
@@ -242,7 +247,7 @@ app.get('/openapi.json', (_req: Request, res: Response) => {
         }
       },
       '/api/risk': {
-        get: {
+        post: {
           operationId: 'get_risk',
           summary: 'Get risk assessment for crypto assets',
           tags: ['Market Intelligence'],
@@ -250,15 +255,20 @@ app.get('/openapi.json', (_req: Request, res: Response) => {
             price: { mode: 'fixed', currency: 'USD', amount: '0.020000' },
             protocols: [{ x402: {} }]
           },
-          parameters: [
-            {
-              name: 'symbol',
-              in: 'query',
-              required: true,
-              schema: { type: 'string' },
-              description: 'Crypto symbol (e.g., BTC, ETH)'
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    symbol: { type: 'string', description: 'Crypto symbol (e.g., BTC, ETH)', examples: ['BTC'] }
+                  },
+                  required: ['symbol']
+                }
+              }
             }
-          ],
+          },
           responses: {
             '200': {
               description: 'Successful risk assessment',
@@ -282,7 +292,7 @@ app.get('/openapi.json', (_req: Request, res: Response) => {
         }
       },
       '/api/forecast': {
-        get: {
+        post: {
           operationId: 'get_forecast',
           summary: 'Get price forecast for crypto assets',
           tags: ['Market Intelligence'],
@@ -290,15 +300,21 @@ app.get('/openapi.json', (_req: Request, res: Response) => {
             price: { mode: 'fixed', currency: 'USD', amount: '0.020000' },
             protocols: [{ x402: {} }]
           },
-          parameters: [
-            {
-              name: 'symbol',
-              in: 'query',
-              required: true,
-              schema: { type: 'string' },
-              description: 'Crypto symbol (e.g., BTC, ETH)'
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    symbol: { type: 'string', description: 'Crypto symbol (e.g., BTC, ETH)', examples: ['BTC'] },
+                    hours: { type: 'integer', description: 'Forecast horizon in hours', examples: [24] }
+                  },
+                  required: ['symbol']
+                }
+              }
             }
-          ],
+          },
           responses: {
             '200': {
               description: 'Successful forecast response',
