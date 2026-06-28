@@ -1,16 +1,20 @@
 import express from 'express';
 import cors from 'cors';
-import { checkTradePreflight, getDecision, auditTradeDecision } from './api/market-intelligence.js';
+import { executeTool, registerTools } from './mcp-server.js';
+import { checkTradePreflight, getDecision, auditTradeDecision, getCryptoSignals, getCryptoRisk, getCryptoForecast } from './api/market-intelligence.js';
+import { AUTOMATIONS } from './data/agent-automations.js';
+const AGENT_AUTOMATIONS = AUTOMATIONS;
 const app = express();
 const PORT = process.env.PORT || 3001;
 const WALLET = process.env.WALLET_ADDRESS || '0x7457c38Ee6306d698C94B23914724F74C8E6e0DB';
+const VERSION = '1.1.0';
 app.use(cors());
-app.use(express.json());
-// X402 Protocol: Return 402 when no payment header
-app.use((_req, res, next) => {
-    if (_req.path === '/' || _req.path === '/health')
+app.use(express.json({ limit: '256kb' }));
+// ─── X402 Protocol ─────────────────────────────────────────────
+app.use((req, res, next) => {
+    if (req.path === '/' || req.path === '/health' || req.path === '/x402-config' || req.path === '/.well-known/x402.json')
         return next();
-    const payment = _req.headers['x402-payment'];
+    const payment = req.headers['x402-payment'];
     if (!payment) {
         return res.status(402).json({
             x402: {
@@ -18,114 +22,184 @@ app.use((_req, res, next) => {
                         scheme: 'exact',
                         network: 'base',
                         maxPrice: '0.10',
-                        resource: `https://${_req.headers.host}${_req.path}`,
+                        resource: `https://${req.headers.host}${req.path}`,
+                        description: 'Kronos X402 - Agent API access',
                     }],
                 wallet: WALLET,
+                facilitator: 'https://x402scan.com/facilitator',
             }
         });
     }
     next();
 });
-// Health
+// ─── Health ────────────────────────────────────────────────────
 app.get('/health', (_req, res) => {
-    res.json({ status: 'kronos-x402 live', wallet: WALLET, network: 'base', version: '1.0.0' });
+    res.json({ status: 'kronos-x402 live', wallet: WALLET, network: 'base', version: VERSION, uptime: process.uptime() });
 });
-// MCP endpoint
+// ─── X402 Discovery Endpoint ──────────────────────────────────
+app.get('/x402-config', (_req, res) => {
+    res.json({
+        name: 'Kronos X402',
+        version: VERSION,
+        wallet: WALLET,
+        network: 'base',
+        facilitator: 'https://x402scan.com/facilitator',
+        tools: {
+            check_trade_preflight: { price: '0.03', description: 'Pre-trade risk check' },
+            get_crypto_decision: { price: '0.10', description: 'Full market decision' },
+            audit_trade_decision: { price: '0.05', description: 'Post-decision audit' },
+            get_signals: { price: '0.02', description: 'Raw signal data' },
+            get_risk: { price: '0.02', description: 'Risk assessment' },
+            get_forecast: { price: '0.02', description: 'Price forecast' },
+        },
+        payment_header: 'X402-Payment: <encoded-payment>',
+        website: 'https://github.com/pgentles/kronos-x402',
+    });
+});
+app.get('/.well-known/x402.json', (_req, res) => {
+    res.json({
+        name: 'Kronos X402',
+        wallet: WALLET,
+        network: 'base',
+        facilitator: 'https://x402scan.com/facilitator',
+        tools: [
+            { name: 'check_trade_preflight', price: '0.03' },
+            { name: 'get_crypto_decision', price: '0.10' },
+            { name: 'audit_trade_decision', price: '0.05' },
+            { name: 'get_signals', price: '0.02' },
+            { name: 'get_risk', price: '0.02' },
+            { name: 'get_forecast', price: '0.02' },
+        ],
+    });
+});
+// ─── MCP Endpoint ──────────────────────────────────────────────
 app.post('/mcp', async (req, res) => {
-    try {
-        const mcp = { jsonrpc: '2.0', id: req.body.id };
-        if (req.body.method === 'initialize') {
-            mcp.result = {
-                protocolVersion: '2024-11-05',
-                capabilities: { tools: {} },
-                serverInfo: { name: 'kronos-x402', version: '1.0.0' }
-            };
-        }
-        else if (req.body.method === 'tools/list') {
-            mcp.result = {
-                tools: [
-                    {
-                        name: 'check_trade_preflight',
-                        description: 'Pre-trade risk check for crypto positions',
-                        inputSchema: { type: 'object', properties: { symbol: { type: 'string' } }, required: ['symbol'] },
-                    },
-                    {
-                        name: 'get_crypto_decision',
-                        description: 'Full buy/sell/hold decision',
-                        inputSchema: { type: 'object', properties: { symbol: { type: 'string' } }, required: ['symbol'] },
-                    },
-                    {
-                        name: 'audit_trade_decision',
-                        description: 'Post-decision audit with PASS/FAIL verdict',
-                        inputSchema: { type: 'object', properties: { decisionId: { type: 'string' }, windowHours: { type: 'number' } }, required: ['decisionId'] },
-                    },
-                ]
-            };
-        }
-        else if (req.body.method === 'tools/call') {
-            const toolName = req.body.params?.name;
-            const args = req.body.params?.arguments || {};
-            let result;
-            try {
-                if (toolName === 'check_trade_preflight') {
-                    const r = checkTradePreflight(args.symbol || 'BTC');
-                    result = JSON.stringify(r, null, 2);
-                }
-                else if (toolName === 'get_crypto_decision') {
-                    const r = getDecision(args.symbol || 'BTC');
-                    result = JSON.stringify(r, null, 2);
-                }
-                else if (toolName === 'audit_trade_decision') {
-                    const r = auditTradeDecision(args.decisionId || 'none', args.windowHours || 1);
-                    result = JSON.stringify(r, null, 2);
-                }
-                else {
-                    result = JSON.stringify({ error: `Unknown tool: ${toolName}` });
-                }
-                mcp.result = { content: [{ type: 'text', text: result }] };
-            }
-            catch (e) {
-                mcp.result = { content: [{ type: 'text', text: JSON.stringify({ error: e.message }) }] };
-            }
-        }
-        res.json(mcp);
+    const mcp = { jsonrpc: '2.0', id: req.body.id };
+    if (req.body.method === 'initialize') {
+        mcp.result = {
+            protocolVersion: '2024-11-05',
+            capabilities: { tools: {} },
+            serverInfo: { name: 'kronos-x402', version: VERSION }
+        };
     }
-    catch (e) {
-        res.status(500).json({ error: e.message });
+    else if (req.body.method === 'tools/list') {
+        mcp.result = { tools: registerTools() };
     }
+    else if (req.body.method === 'initialize') {
+        mcp.result = {
+            protocolVersion: '2024-11-05',
+            capabilities: { tools: {} },
+            serverInfo: { name: 'kronos-x402', version: VERSION }
+        };
+    }
+    else if (req.body.method === 'tools/call') {
+        const toolName = req.body.params?.name;
+        const args = req.body.params?.arguments || {};
+        mcp.result = await executeTool(toolName, args, { prepaid: true, requestId: String(req.body.id) });
+    }
+    else if (req.body.method === 'ping') {
+        mcp.result = {};
+    }
+    else {
+        mcp.error = { code: -32601, message: `Method not found: ${req.body.method}` };
+    }
+    res.json(mcp);
 });
-// REST API endpoints
+// ─── REST API: Market Intelligence ────────────────────────────
+// Preflight
 app.post('/api/preflight', (req, res) => {
-    const { symbol } = req.body;
-    const result = checkTradePreflight(symbol || 'BTC');
+    const { symbol, direction, amount_usd } = req.body;
+    if (!symbol || !direction)
+        return res.status(400).json({ error: 'symbol and direction required' });
+    const result = checkTradePreflight(symbol);
     res.json(result);
 });
+// Decision
 app.post('/api/decision', (req, res) => {
-    const { symbol } = req.body;
-    const result = getDecision(symbol || 'BTC');
+    const { symbol, direction, amount_usd } = req.body;
+    if (!symbol || !direction)
+        return res.status(400).json({ error: 'symbol and direction required' });
+    const result = getDecision(symbol);
     res.json(result);
 });
+// Audit
 app.post('/api/audit', (req, res) => {
     const { decisionId, windowHours } = req.body;
-    const result = auditTradeDecision(decisionId || 'none', windowHours || 1);
+    if (!decisionId)
+        return res.status(400).json({ error: 'decisionId required' });
+    const result = auditTradeDecision(decisionId, windowHours || 1);
     res.json(result);
 });
+// Signals
+app.post('/api/signals', (req, res) => {
+    const { symbol } = req.body;
+    if (!symbol)
+        return res.status(400).json({ error: 'symbol required' });
+    const result = getCryptoSignals(symbol);
+    res.json(result);
+});
+// Risk
+app.post('/api/risk', (req, res) => {
+    const { symbol } = req.body;
+    if (!symbol)
+        return res.status(400).json({ error: 'symbol required' });
+    const result = getCryptoRisk(symbol);
+    res.json(result);
+});
+// Forecast
+app.post('/api/forecast', (req, res) => {
+    const { symbol, hours } = req.body;
+    if (!symbol)
+        return res.status(400).json({ error: 'symbol required' });
+    const result = getCryptoForecast(symbol);
+    res.json(result);
+});
+// ─── Agent Automations ─────────────────────────────────────────
 app.get('/api/automations', (_req, res) => {
     res.json({
-        automations: [
-            { name: 'DeFi Yield Scanner', price: '0.01 USDC' },
-            { name: 'NFT Floor Alert', price: '0.01 USDC' },
-            { name: 'ICO Snipe Detection', price: '0.01 USDC' },
-            { name: 'Security Anomaly', price: '0.01 USDC' },
-            { name: 'Infra Monitor', price: '0.01 USDC' },
-            { name: 'Auto Signal Bot', price: '0.01 USDC' },
-        ]
+        automations: AGENT_AUTOMATIONS,
+        pricing: '0.01 USDC per activation',
+    });
+});
+app.post('/api/automations/run', (req, res) => {
+    const { agent_type, symbol } = req.body;
+    if (!agent_type || !symbol)
+        return res.status(400).json({ error: 'agent_type and symbol required' });
+    const auto = AGENT_AUTOMATIONS.find(a => a.slug === agent_type || a.title.toLowerCase().includes(agent_type.toLowerCase()));
+    if (!auto)
+        return res.status(404).json({ error: `Unknown agent: ${agent_type}`, available: AGENT_AUTOMATIONS.map(a => a.slug) });
+    const decision = getDecision(symbol);
+    res.json({ agent: auto, symbol, result: decision, executed_at: new Date().toISOString() });
+});
+// ─── Agent Types (discoverability) ─────────────────────────────
+app.get('/api/agent-types', (_req, res) => {
+    res.json({
+        agents: [
+            { type: 'DeFi Yield Scanner', description: 'Monitor yields across DEX pools', indicators: ['tvl', 'apy', 'volatility'], data: 'on-chain', active: true },
+            { type: 'NFT Floor Alert', description: 'Real-time NFT floor price alerts', indicators: ['floor_price', 'volume', 'rarity'], data: 'on-chain', active: true },
+            { type: 'ICO Snipe Detection', description: 'Detect new token launches', indicators: ['liquidity', 'contract_verified', 'holders'], data: 'on-chain', active: true },
+            { type: 'Security Anomaly', description: 'Detect exploits and anomalies', indicators: ['tvl_change', 'price_dump', 'whale_transfer'], data: 'on-chain', active: true },
+            { type: 'Infrastructure Monitor', description: 'On-chain infrastructure health', indicators: ['block_time', 'gas', 'uptime'], data: 'RPC', active: true },
+            { type: 'Signal Aggregator', description: 'Multi-source signal feed', indicators: ['technical', 'on-chain', 'social'], data: 'hybrid', active: true },
+            { type: 'Custom Agent', description: 'User-defined agent logic', indicators: ['configurable'], data: 'configurable', active: false },
+        ],
+    });
+});
+// ─── Wallet Info ───────────────────────────────────────────────
+app.get('/api/wallet', (_req, res) => {
+    res.json({
+        wallet: WALLET,
+        network: 'base',
+        chain_id: 8453,
+        usdc_contract: '0x833589c731f89c7A8D8948e3eBb9B9c6c4a1f7e4c',
+        balance: 'live-on-chain',
     });
 });
 app.listen(PORT, () => {
-    console.log(`Kronos X402 running on port ${PORT}`);
+    console.log(`Kronos X402 v${VERSION} running on port ${PORT}`);
     console.log(`Wallet: ${WALLET}`);
     console.log(`MCP: http://localhost:${PORT}/mcp`);
-    console.log(`API: http://localhost:${PORT}/api/{preflight,decision,audit}`);
+    console.log(`API: http://localhost:${PORT}/api/{preflight,decision,audit,signals,risk,forecast,automations,agent-types,wallet}`);
+    console.log(`X402 Config: http://localhost:${PORT}/x402-config`);
 });
 //# sourceMappingURL=server.js.map

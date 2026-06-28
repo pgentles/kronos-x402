@@ -1,0 +1,45 @@
+# X402 Marketplace Configuration
+# This file is used by x402scan.com for service discovery
+
+name: "Kronos X402 - AI Market Intelligence"
+version: "1.1.0"
+description: "Professional crypto market intelligence for AI agents. Trade preflight checks, real-time decisions, AI audits, risk assessments, signals, and forecasts."
+wallet: "0x7457c38Ee6306d698C94B23914724F74C8E6e0DB"
+network: "base"
+chain_id: 8453
+website: "https://github.com/pgentles/kronos-x402"
+mcp_endpoint: "/mcp"
+facilitator: "https://x402scan.com/facilitator"
+
+pricing:
+  check_trade_preflight:
+    price: "0.03"
+    description: "Pre-trade risk check for crypto positions"
+  get_crypto_decision:
+    price: "0.10"
+    description: "Full buy/sell/hold market decision with conviction"
+  audit_trade_decision:
+    price: "0.05"
+    description: "Post-decision audit with PASS/FAIL verdict"
+  get_signals:
+    price: "0.02"
+    description: "Raw market signal data"
+  get_risk:
+    price: "0.02"
+    description: "Risk assessment for crypto assets"
+  get_forecast:
+    price: "0.02"
+    description: "Price forecast"
+
+payment:
+  scheme: "exact"
+  header: "X402-Payment"
+  contract: "0x833589c731f89c7A8D8948e3eBb9B9c6c4a1f7e4c"
+
+tools:
+  - check_trade_preflight
+  - get_crypto_decision
+  - audit_trade_decision
+  - get_signals
+  - get_risk
+  - get_forecast
