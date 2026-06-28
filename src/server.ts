@@ -7,7 +7,7 @@ const AGENT_AUTOMATIONS = AUTOMATIONS;
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const WALLET = process.env.WALLET_ADDRESS || '0x7457c38Ee6306d698C94B23914724F74C8E6e0DB';
+const WALLET = process.env.WALLET_ADDRESS || '0x421C25445d6CF7B292933D743E698ed24dE36270';
 const VERSION = '1.1.0';
 
 app.use(cors());
