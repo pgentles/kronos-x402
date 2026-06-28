@@ -12,10 +12,11 @@ const VERSION = '1.1.0';
 
 app.use(cors());
 app.use(express.json({ limit: '256kb' }));
+app.use(express.static('public'));
 
 // ─── X402 Protocol ─────────────────────────────────────────────
 app.use((req: Request, res: Response, next: any) => {
-  if (req.path === '/' || req.path === '/health' || req.path === '/x402-config' || req.path === '/.well-known/x402.json' || req.path === '/x402/discover' || req.path === '/x402' || req.path === '/x402/facilitate' || req.path === '/openapi.json') return next();
+  if (req.path === '/' || req.path === '/health' || req.path === '/x402-config' || req.path === '/.well-known/x402.json' || req.path === '/x402/discover' || req.path === '/x402' || req.path === '/x402/facilitate' || req.path === '/openapi.json' || req.path === '/favicon.ico') return next();
 
   const payment = req.headers['x402-payment'];
   if (!payment) {
