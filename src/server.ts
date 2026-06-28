@@ -19,29 +19,28 @@ app.use((req: Request, res: Response, next: any) => {
 
   const payment = req.headers['x402-payment'];
   if (!payment) {
-    // Standard 402 Payment Required — x402 v2 protocol
-    // @agentcash/discovery requires: x402Version: 2, network, asset, amount in accepts
-    // detectProtocols checks x-payment-protocol header for "x402"
+    // x402 v2 response — signals: @agentcash/discovery
+    // - X-Payment-Protocol header: detected by detectProtocols() → protocols: ["x402"]
+    // - x402Version in body: v2 format with accepts[] as fallback
+    // - www-authenticate: parsed by extractPaymentOptions4 → paymentOptions with protocol "x402"
     res.set('X-Payment-Protocol', 'x402');
     res.set('X402-Payment', 'required');
+    res.set('WWW-Authenticate', 'Payment scheme="exact", network="base", asset="USDC", amount="0.10"');
+    const accepts = [
+      {
+        network: 'base',
+        asset: 'USDC',
+        amount: '0.10',
+        scheme: 'exact',
+        payTo: WALLET,
+        resource: `https://${req.headers.host}${req.path}`,
+      }
+    ];
     return res.status(402).json({
       x402Version: 2,
-      ...(req.path === '/.well-known/x402.json' || req.path === '/openapi.json'
-        ? {}
-        : {
-            accepts: [
-              {
-                network: 'base',
-                asset: 'USDC',
-                amount: '0.10',
-                scheme: 'exact',
-                payTo: WALLET,
-                resource: `https://${req.headers.host}${req.path}`,
-              }
-            ],
-            wallet: WALLET,
-            facilitator: 'https://x402scan.com/facilitator',
-          })
+      accepts,
+      wallet: WALLET,
+      facilitator: 'https://x402scan.com/facilitator',
     });
   }
   next();
