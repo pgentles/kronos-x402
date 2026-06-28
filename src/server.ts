@@ -15,7 +15,7 @@ app.use(express.json({ limit: '256kb' }));
 
 // ─── X402 Protocol ─────────────────────────────────────────────
 app.use((req: Request, res: Response, next: any) => {
-  if (req.path === '/' || req.path === '/health' || req.path === '/x402-config' || req.path === '/.well-known/x402.json') return next();
+  if (req.path === '/' || req.path === '/health' || req.path === '/x402-config' || req.path === '/.well-known/x402.json' || req.path === '/x402/discover') return next();
 
   const payment = req.headers['x402-payment'];
   if (!payment) {
@@ -76,6 +76,48 @@ app.get('/.well-known/x402.json', (_req: Request, res: Response) => {
       { name: 'get_risk', price: '0.02' },
       { name: 'get_forecast', price: '0.02' },
     ],
+  });
+});
+
+// ─── X402 Discovery (public, no 402 challenge) ──────────────────
+app.get('/x402/discover', (_req: Request, res: Response) => {
+  res.json({
+    schema: 'https://x402.org/schemas/discovery/v1',
+    name: 'Kronos X402 - AI Market Intelligence',
+    version: VERSION,
+    wallet: WALLET,
+    network: 'base',
+    chain_id: 8453,
+    facilitator: 'https://x402scan.com/facilitator',
+    mcp_endpoint: '/mcp',
+    pricing_scheme: 'exact',
+    payment_header: 'X402-Payment',
+    tools: [
+      { name: 'check_trade_preflight', price: '0.03', description: 'Pre-trade risk assessment' },
+      { name: 'get_crypto_decision', price: '0.10', description: 'Full buy/sell/hold decision' },
+      { name: 'audit_trade_decision', price: '0.05', description: 'Post-decision audit' },
+      { name: 'get_signals', price: '0.02', description: 'Raw market signal data' },
+      { name: 'get_risk', price: '0.02', description: 'Risk assessment' },
+      { name: 'get_forecast', price: '0.02', description: 'Price forecast' },
+    ],
+    capabilities: ['mcp', 'x402', 'streamable-http'],
+    uptime_seconds: Math.round(process.uptime()),
+  });
+});
+
+// ─── Public Registration (for x402scan discovery) ───────────────
+app.post('/x402/register', express.json(), (req: Request, res: Response) => {
+  const { url, wallet, name } = req.body;
+  if (!url || !wallet || !name) {
+    return res.status(400).json({ error: 'url, wallet, and name required' });
+  }
+  res.json({
+    status: 'registered',
+    server: url,
+    wallet,
+    name,
+    network: 'base',
+    registered_at: new Date().toISOString(),
   });
 });
 
