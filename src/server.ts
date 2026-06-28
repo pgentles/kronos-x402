@@ -165,6 +165,7 @@ app.get('/openapi.json', (_req: Request, res: Response) => {
           operationId: 'mcp',
           summary: 'MCP JSON-RPC endpoint for tool invocation',
           tags: ['MCP'],
+          security: [],  // Free endpoint — no x402 payment required
           requestBody: {
             required: true,
             content: {
@@ -324,6 +325,7 @@ app.get('/openapi.json', (_req: Request, res: Response) => {
           operationId: 'x402Manifest',
           summary: 'X402 payment manifest',
           tags: ['Discovery'],
+          security: [],  // Free endpoint — discovery
           responses: {
             '200': {
               description: 'X402 manifest',
