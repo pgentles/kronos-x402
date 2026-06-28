@@ -154,9 +154,9 @@ app.get('/openapi.json', (_req: Request, res: Response) => {
     info: {
       title: 'Kronos X402 - AI Market Intelligence API',
       version: '1.1.0',
-      description: 'Professional crypto market intelligence for AI agents',
-      'x-guidance': 'Use POST /mcp for JSON-RPC tool invocation (check_trade_preflight, get_crypto_decision, audit_trade_decision, get_signals, get_risk, get_forecast). All paid endpoints require X402-Payment header.',
-      contact: { email: 'pgentles@gmail.com' }
+      description: 'Professional crypto market intelligence for AI agents — signals, risk assessment, price forecasts, and automated trading decisions',
+      contact: { email: 'pgpgentles@gmail.com' },
+      'x-guidance': 'Use POST /mcp for JSON-RPC tool invocation (check_trade_preflight, get_crypto_decision, audit_trade_decision, get_signals, get_risk, get_forecast). All paid endpoints require X402-Payment header.'
     },
     servers: [{ url: 'https://kronos-x402.onrender.com' }],
     paths: {
