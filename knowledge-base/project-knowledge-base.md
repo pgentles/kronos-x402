@@ -227,9 +227,11 @@ git push origin main
 Render Dashboard → Service "kronos-x402" → **Live Logs**
 
 ### 8.3 Check for Transactions
-1. **x402scan dashboard:** Log in → your server page → Transactions/Stats
-2. **On-chain:** Look up `0x421C25445d6CF7B292933D743E698ed24dE36270` on https://basescan.org
-3. **Server logs:** Watch for POST requests to paid endpoints
+1. **Telegram alerts:** Cron job `278da0e7396c` sends alerts every 10 minutes (automatic)
+2. **x402scan dashboard:** Log in → your server page → Transactions/Stats
+3. **On-chain:** Look up `0x421C25445d6CF7B292933D743E698ed24dE36270` on https://basescan.org
+4. **Server endpoint:** `curl -s https://kronos-x402.onrender.com/api/sales`
+5. **Render logs:** Dashboard → Live Logs, filter for `[SALE]`
 
 ### 8.4 Health Check
 ```bash
@@ -327,9 +329,28 @@ kronos-x402/
 
 ---
 
-## 10. Owner Contact
+## Transaction Notifications
+
+### Telegram Alerts (Active)
+- **Cron Job ID:** `278da0e7396c`
+- **Schedule:** Every 10 minutes
+- **Delivery:** Telegram DM to this chat
+- **Trigger:** Only sends when new sales detected since last check
+- **Memory key:** `kronos-x402-last-sales-count` (tracks last known count)
+- **Endpoints monitored:** All `/api/*` paths when `X402-Payment` header present
+
+### To Manage the Cron
+- **Pause:** `cronjob(action="pause", job_id="278da0e7396c")`
+- **Resume:** `cronjob(action="resume", job_id="278da0e7396c")`
+- **Update schedule:** `cronjob(action="update", job_id="278da0e7396c", schedule="5m")`
+- **Remove:** `cronjob(action="remove", job_id="278da0e7396c")`
+
+---
+
+## Owner Contact
 
 - **Name:** Patrick Gentles
 - **Email:** pgpgentles@gmail.com
 - **Wallet:** `0x421C25445d6CF7B292933D743E698ed24dE36270`
 - **x402scan link:** https://x402scan.com/server/kronos-x402.onrender.com
+- **Repo:** https://github.com/pgentles/kronos-x402
