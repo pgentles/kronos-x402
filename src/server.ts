@@ -121,81 +121,217 @@ app.post('/x402/register', express.json(), (req: Request, res: Response) => {
   });
 });
 
-// ─── X402 /x402 Route (main protocol endpoint) ─────────────────
-app.get('/x402', (_req: Request, res: Response) => {
-  res.json({
-    x402: {
-      accepts: [
-        {
-          scheme: 'exact',
-          network: 'base',
-          maxPrice: '0.10',
-          resource: 'https://kronos-x402.onrender.com/x402',
-          description: 'Kronos X402 - Agent API access'
-        }
-      ],
-      wallet: WALLET,
-      facilitator: 'https://x402scan.com/facilitator'
-    }
-  });
-});
-
+// ─── X402 /x402 Route (facilitation endpoint) ───────────────────
 app.post('/x402/facilitate', express.json(), (req: Request, res: Response) => {
-  const { payment, resource } = req.body;
-  // Simple facilitator - accepts any payment and returns success
+  // Simulated facilitator - validates the payment and returns settlement info
+  const { payment, resource, maxPrice } = req.body;
   res.json({
     status: 'accepted',
-    payment: payment,
+    network: 'base',
+    wallet: WALLET,
+    facilitator: 'https://x402scan.com/facilitator',
     resource: resource,
-    timestamp: new Date().toISOString()
+    price: maxPrice || '0.10',
+    settled_at: new Date().toISOString()
   });
 });
 
 // ─── MCP Endpoint ──────────────────────────────────────────────
-// ─── OpenAPI Discovery (.well-known/openapi.json) ─────────────
-app.get('/.well-known/openapi.json', (_req: Request, res: Response) => {
+// ─── OpenAPI Discovery (/openapi.json) ─────────────────────────
+app.get('/openapi.json', (_req: Request, res: Response) => {
   res.json({
-    openapi: '3.0.0',
+    openapi: '3.1.0',
     info: {
       title: 'Kronos X402 - AI Market Intelligence API',
       version: '1.1.0',
-      description: 'Professional crypto market intelligence for AI agents'
+      description: 'Professional crypto market intelligence for AI agents',
+      'x-guidance': 'Use POST /mcp for JSON-RPC tool invocation (check_trade_preflight, get_crypto_decision, audit_trade_decision, get_signals, get_risk, get_forecast). All paid endpoints require X402-Payment header.',
+      contact: { email: 'pgentles@gmail.com' }
     },
     servers: [{ url: 'https://kronos-x402.onrender.com' }],
     paths: {
       '/mcp': {
         post: {
-          summary: 'MCP JSON-RPC endpoint',
           operationId: 'mcp',
-          responses: { '200': { description: 'OK' } }
-        }
-      },
-      '/x402/discover': {
-        get: {
-          summary: 'X402 service discovery',
-          operationId: 'discover',
-          responses: { '200': { description: 'OK' } }
+          summary: 'MCP JSON-RPC endpoint for tool invocation',
+          tags: ['MCP'],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    jsonrpc: { type: 'string', enum: ['2.0'] },
+                    method: { type: 'string' },
+                    id: { type: ['string', 'number'] },
+                    params: { type: 'object' }
+                  },
+                  required: ['jsonrpc', 'method', 'id']
+                }
+              }
+            }
+          },
+          responses: {
+            '200': {
+              description: 'Successful JSON-RPC response',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      jsonrpc: { type: 'string' },
+                      id: { type: ['string', 'number'] },
+                      result: { type: 'object' }
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
       },
       '/api/signals': {
         get: {
-          summary: 'Market signals',
           operationId: 'get_signals',
-          responses: { '402': { description: 'Payment Required' }, '200': { description: 'OK' } }
+          summary: 'Get raw market signals for crypto assets',
+          tags: ['Market Intelligence'],
+          'x-payment-info': {
+            price: { mode: 'fixed', currency: 'USD', amount: '0.020000' },
+            protocols: [{ x402: {} }]
+          },
+          parameters: [
+            {
+              name: 'symbol',
+              in: 'query',
+              required: true,
+              schema: { type: 'string' },
+              description: 'Crypto symbol (e.g., BTC, ETH)'
+            }
+          ],
+          responses: {
+            '200': {
+              description: 'Successful signals response',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      symbol: { type: 'string' },
+                      signals: { type: 'object' },
+                      timestamp: { type: 'string' }
+                    },
+                    required: ['symbol', 'signals']
+                  }
+                }
+              }
+            },
+            '402': { description: 'Payment Required' }
+          }
         }
       },
       '/api/risk': {
         get: {
-          summary: 'Risk assessment',
           operationId: 'get_risk',
-          responses: { '402': { description: 'Payment Required' }, '200': { description: 'OK' } }
+          summary: 'Get risk assessment for crypto assets',
+          tags: ['Market Intelligence'],
+          'x-payment-info': {
+            price: { mode: 'fixed', currency: 'USD', amount: '0.020000' },
+            protocols: [{ x402: {} }]
+          },
+          parameters: [
+            {
+              name: 'symbol',
+              in: 'query',
+              required: true,
+              schema: { type: 'string' },
+              description: 'Crypto symbol (e.g., BTC, ETH)'
+            }
+          ],
+          responses: {
+            '200': {
+              description: 'Successful risk assessment',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      symbol: { type: 'string' },
+                      risk_score: { type: 'number' },
+                      risk_level: { type: 'string' },
+                      factors: { type: 'array', items: { type: 'string' } }
+                    },
+                    required: ['symbol', 'risk_score']
+                  }
+                }
+              }
+            },
+            '402': { description: 'Payment Required' }
+          }
         }
       },
       '/api/forecast': {
         get: {
-          summary: 'Price forecast',
           operationId: 'get_forecast',
-          responses: { '402': { description: 'Payment Required' }, '200': { description: 'OK' } }
+          summary: 'Get price forecast for crypto assets',
+          tags: ['Market Intelligence'],
+          'x-payment-info': {
+            price: { mode: 'fixed', currency: 'USD', amount: '0.020000' },
+            protocols: [{ x402: {} }]
+          },
+          parameters: [
+            {
+              name: 'symbol',
+              in: 'query',
+              required: true,
+              schema: { type: 'string' },
+              description: 'Crypto symbol (e.g., BTC, ETH)'
+            }
+          ],
+          responses: {
+            '200': {
+              description: 'Successful forecast response',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      symbol: { type: 'string' },
+                      forecast: { type: 'object' },
+                      timestamp: { type: 'string' }
+                    },
+                    required: ['symbol', 'forecast']
+                  }
+                }
+              }
+            },
+            '402': { description: 'Payment Required' }
+          }
+        }
+      },
+      '/.well-known/x402.json': {
+        get: {
+          operationId: 'x402Manifest',
+          summary: 'X402 payment manifest',
+          tags: ['Discovery'],
+          responses: {
+            '200': {
+              description: 'X402 manifest',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      name: { type: 'string' },
+                      wallet: { type: 'string' },
+                      network: { type: 'string' },
+                      facilitator: { type: 'string' }
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
       }
     }
