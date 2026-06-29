@@ -9,6 +9,9 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 const WALLET = process.env.WALLET_ADDRESS || '0x421C25445d6CF7B292933D743E698ed24dE36270';
 const VERSION = '1.1.0';
+const USDC_BASE_MAINNET = '0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA';
+const BASE_NETWORK_CAIP2 = 'eip155:8453';
+const AMOUNT = '100000';
 
 app.use(cors());
 app.use(express.json({ limit: '256kb' }));
@@ -26,29 +29,31 @@ app.use((req: Request, res: Response, next: any) => {
     // - www-authenticate: parsed by extractPaymentOptions4 → paymentOptions with protocol "x402"
     res.set('X-Payment-Protocol', 'x402');
     res.set('X402-Payment', 'required');
-    res.set('Payment-Required', 'eyJ4ND...IifQ==');
+    const resourceUrl = `https://${req.headers.host}${req.path}`;
     const accepts = [
       {
-        network: 'base',
-        asset: 'USDC',
-        amount: '0.10',
         scheme: 'exact',
+        network: BASE_NETWORK_CAIP2,
+        amount: AMOUNT,
+        asset: USDC_BASE_MAINNET,
         payTo: WALLET,
-        resource: `https://${req.headers.host}${req.path}`,
+        maxTimeoutSeconds: 60,
+        resource: {
+          url: resourceUrl,
+          description: 'AI market intelligence — signals, risk, forecast',
+          mimeType: 'application/json',
+          serviceName: 'Kronos X402',
+          tags: ['crypto', 'market-intelligence', 'trading'],
+        },
+        extra: { name: 'USDC', version: '2' },
       }
     ];
-    return res.status(402).json({
-      x402Version: 2,
-      accepts,
-      wallet: WALLET,
-      facilitator: 'https://x402scan.com/facilitator',
-    });
+    const body = { x402Version: 2, accepts, wallet: WALLET };
+    const b64 = Buffer.from(JSON.stringify(body)).toString('base64');
+    res.set('Payment-Required', b64);
+    return res.status(402).json(body);
   }
 
-  // Payment received → record sale
-  if (req.path.startsWith('/api/') || req.path === '/mcp') {
-    recordSale(req.method, req.path, req.headers['user-agent']);
-  }
   next();
 });
 

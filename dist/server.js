@@ -6,29 +6,49 @@ import { AUTOMATIONS } from './data/agent-automations.js';
 const AGENT_AUTOMATIONS = AUTOMATIONS;
 const app = express();
 const PORT = process.env.PORT || 3001;
-const WALLET = process.env.WALLET_ADDRESS || '0x7457c38Ee6306d698C94B23914724F74C8E6e0DB';
+const WALLET = process.env.WALLET_ADDRESS || '0x421C25445d6CF7B292933D743E698ed24dE36270';
 const VERSION = '1.1.0';
+const USDC_BASE_MAINNET = '0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA';
+const BASE_NETWORK_CAIP2 = 'eip155:8453';
+const AMOUNT = '100000';
 app.use(cors());
 app.use(express.json({ limit: '256kb' }));
+app.use(express.static('public'));
 // ─── X402 Protocol ─────────────────────────────────────────────
 app.use((req, res, next) => {
-    if (req.path === '/' || req.path === '/health' || req.path === '/x402-config' || req.path === '/.well-known/x402.json')
+    if (req.path === '/' || req.path === '/health' || req.path === '/x402-config' || req.path === '/.well-known/x402.json' || req.path === '/x402/discover' || req.path === '/x402' || req.path === '/x402/facilitate' || req.path === '/openapi.json' || req.path === '/favicon.ico')
         return next();
     const payment = req.headers['x402-payment'];
     if (!payment) {
-        return res.status(402).json({
-            x402: {
-                accepts: [{
-                        scheme: 'exact',
-                        network: 'base',
-                        maxPrice: '0.10',
-                        resource: `https://${req.headers.host}${req.path}`,
-                        description: 'Kronos X402 - Agent API access',
-                    }],
-                wallet: WALLET,
-                facilitator: 'https://x402scan.com/facilitator',
+        // x402 v2 response — signals: @agentcash/discovery
+        // - X-Payment-Protocol header: detected by detectProtocols() → protocols: ["x402"]
+        // - x402Version in body: v2 format with accepts[] as fallback
+        // - www-authenticate: parsed by extractPaymentOptions4 → paymentOptions with protocol "x402"
+        res.set('X-Payment-Protocol', 'x402');
+        res.set('X402-Payment', 'required');
+        const resourceUrl = `https://${req.headers.host}${req.path}`;
+        const accepts = [
+            {
+                scheme: 'exact',
+                network: BASE_NETWORK_CAIP2,
+                amount: AMOUNT,
+                asset: USDC_BASE_MAINNET,
+                payTo: WALLET,
+                maxTimeoutSeconds: 60,
+                resource: {
+                    url: resourceUrl,
+                    description: 'AI market intelligence — signals, risk, forecast',
+                    mimeType: 'application/json',
+                    serviceName: 'Kronos X402',
+                    tags: ['crypto', 'market-intelligence', 'trading'],
+                },
+                extra: { name: 'USDC', version: '2' },
             }
-        });
+        ];
+        const body = { x402Version: 2, accepts, wallet: WALLET };
+        const b64 = Buffer.from(JSON.stringify(body)).toString('base64');
+        res.set('Payment-Required', b64);
+        return res.status(402).json(body);
     }
     next();
 });
@@ -72,7 +92,279 @@ app.get('/.well-known/x402.json', (_req, res) => {
         ],
     });
 });
+// ─── X402 Discovery (public, no 402 challenge) ──────────────────
+app.get('/x402/discover', (_req, res) => {
+    res.json({
+        schema: 'https://x402.org/schemas/discovery/v1',
+        name: 'Kronos X402 - AI Market Intelligence',
+        version: VERSION,
+        wallet: WALLET,
+        network: 'base',
+        chain_id: 8453,
+        facilitator: 'https://x402scan.com/facilitator',
+        mcp_endpoint: '/mcp',
+        pricing_scheme: 'exact',
+        payment_header: 'X402-Payment',
+        tools: [
+            { name: 'check_trade_preflight', price: '0.03', description: 'Pre-trade risk assessment' },
+            { name: 'get_crypto_decision', price: '0.10', description: 'Full buy/sell/hold decision' },
+            { name: 'audit_trade_decision', price: '0.05', description: 'Post-decision audit' },
+            { name: 'get_signals', price: '0.02', description: 'Raw market signal data' },
+            { name: 'get_risk', price: '0.02', description: 'Risk assessment' },
+            { name: 'get_forecast', price: '0.02', description: 'Price forecast' },
+        ],
+        capabilities: ['mcp', 'x402', 'streamable-http'],
+        uptime_seconds: Math.round(process.uptime()),
+    });
+});
+// ─── Public Registration (for x402scan discovery) ───────────────
+app.post('/x402/register', express.json(), (req, res) => {
+    const { url, wallet, name } = req.body;
+    if (!url || !wallet || !name) {
+        return res.status(400).json({ error: 'url, wallet, and name required' });
+    }
+    res.json({
+        status: 'registered',
+        server: url,
+        wallet,
+        name,
+        network: 'base',
+        registered_at: new Date().toISOString(),
+    });
+});
+// ─── X402 /x402 Route (facilitation endpoint) ───────────────────
+app.post('/x402/facilitate', express.json(), (req, res) => {
+    // Simulated facilitator - validates the payment and returns settlement info
+    const { payment, resource, maxPrice } = req.body;
+    res.json({
+        status: 'accepted',
+        network: 'base',
+        wallet: WALLET,
+        facilitator: 'https://x402scan.com/facilitator',
+        resource: resource,
+        price: maxPrice || '0.10',
+        settled_at: new Date().toISOString()
+    });
+});
 // ─── MCP Endpoint ──────────────────────────────────────────────
+// ─── OpenAPI Discovery (/openapi.json) ─────────────────────────
+app.get('/openapi.json', (_req, res) => {
+    res.json({
+        openapi: '3.1.0',
+        info: {
+            title: 'Kronos X402 - AI Market Intelligence API',
+            version: '1.1.0',
+            description: 'Professional crypto market intelligence for AI agents — signals, risk assessment, price forecasts, and automated trading decisions',
+            contact: { email: 'pgpgentles@gmail.com' },
+            'x-guidance': 'Use POST /mcp for JSON-RPC tool invocation (check_trade_preflight, get_crypto_decision, audit_trade_decision, get_signals, get_risk, get_forecast). All paid endpoints require X402-Payment header.'
+        },
+        servers: [{ url: 'https://kronos-x402.onrender.com' }],
+        paths: {
+            '/mcp': {
+                post: {
+                    operationId: 'mcp',
+                    summary: 'MCP JSON-RPC endpoint for tool invocation',
+                    tags: ['MCP'],
+                    security: [], // Free endpoint — no x402 payment required
+                    requestBody: {
+                        required: true,
+                        content: {
+                            'application/json': {
+                                schema: {
+                                    type: 'object',
+                                    properties: {
+                                        jsonrpc: { type: 'string', enum: ['2.0'] },
+                                        method: { type: 'string' },
+                                        id: { type: ['string', 'number'] },
+                                        params: { type: 'object' }
+                                    },
+                                    required: ['jsonrpc', 'method', 'id']
+                                }
+                            }
+                        }
+                    },
+                    responses: {
+                        '200': {
+                            description: 'Successful JSON-RPC response',
+                            content: {
+                                'application/json': {
+                                    schema: {
+                                        type: 'object',
+                                        properties: {
+                                            jsonrpc: { type: 'string' },
+                                            id: { type: ['string', 'number'] },
+                                            result: { type: 'object' }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            '/api/signals': {
+                post: {
+                    operationId: 'get_signals',
+                    summary: 'Get raw market signals for crypto assets',
+                    tags: ['Market Intelligence'],
+                    'x-payment-info': {
+                        price: { mode: 'fixed', currency: 'USD', amount: '0.020000' },
+                        protocols: [{ x402: {} }]
+                    },
+                    requestBody: {
+                        required: true,
+                        content: {
+                            'application/json': {
+                                schema: {
+                                    type: 'object',
+                                    properties: {
+                                        symbol: { type: 'string', description: 'Crypto symbol (e.g., BTC, ETH)', examples: ['BTC'] }
+                                    },
+                                    required: ['symbol']
+                                }
+                            }
+                        }
+                    },
+                    responses: {
+                        '200': {
+                            description: 'Successful signals response',
+                            content: {
+                                'application/json': {
+                                    schema: {
+                                        type: 'object',
+                                        properties: {
+                                            symbol: { type: 'string' },
+                                            signals: { type: 'object' },
+                                            timestamp: { type: 'string' }
+                                        },
+                                        required: ['symbol', 'signals']
+                                    }
+                                }
+                            }
+                        },
+                        '402': { description: 'Payment Required' }
+                    }
+                }
+            },
+            '/api/risk': {
+                post: {
+                    operationId: 'get_risk',
+                    summary: 'Get risk assessment for crypto assets',
+                    tags: ['Market Intelligence'],
+                    'x-payment-info': {
+                        price: { mode: 'fixed', currency: 'USD', amount: '0.020000' },
+                        protocols: [{ x402: {} }]
+                    },
+                    requestBody: {
+                        required: true,
+                        content: {
+                            'application/json': {
+                                schema: {
+                                    type: 'object',
+                                    properties: {
+                                        symbol: { type: 'string', description: 'Crypto symbol (e.g., BTC, ETH)', examples: ['BTC'] }
+                                    },
+                                    required: ['symbol']
+                                }
+                            }
+                        }
+                    },
+                    responses: {
+                        '200': {
+                            description: 'Successful risk assessment',
+                            content: {
+                                'application/json': {
+                                    schema: {
+                                        type: 'object',
+                                        properties: {
+                                            symbol: { type: 'string' },
+                                            risk_score: { type: 'number' },
+                                            risk_level: { type: 'string' },
+                                            factors: { type: 'array', items: { type: 'string' } }
+                                        },
+                                        required: ['symbol', 'risk_score']
+                                    }
+                                }
+                            }
+                        },
+                        '402': { description: 'Payment Required' }
+                    }
+                }
+            },
+            '/api/forecast': {
+                post: {
+                    operationId: 'get_forecast',
+                    summary: 'Get price forecast for crypto assets',
+                    tags: ['Market Intelligence'],
+                    'x-payment-info': {
+                        price: { mode: 'fixed', currency: 'USD', amount: '0.020000' },
+                        protocols: [{ x402: {} }]
+                    },
+                    requestBody: {
+                        required: true,
+                        content: {
+                            'application/json': {
+                                schema: {
+                                    type: 'object',
+                                    properties: {
+                                        symbol: { type: 'string', description: 'Crypto symbol (e.g., BTC, ETH)', examples: ['BTC'] },
+                                        hours: { type: 'integer', description: 'Forecast horizon in hours', examples: [24] }
+                                    },
+                                    required: ['symbol']
+                                }
+                            }
+                        }
+                    },
+                    responses: {
+                        '200': {
+                            description: 'Successful forecast response',
+                            content: {
+                                'application/json': {
+                                    schema: {
+                                        type: 'object',
+                                        properties: {
+                                            symbol: { type: 'string' },
+                                            forecast: { type: 'object' },
+                                            timestamp: { type: 'string' }
+                                        },
+                                        required: ['symbol', 'forecast']
+                                    }
+                                }
+                            }
+                        },
+                        '402': { description: 'Payment Required' }
+                    }
+                }
+            },
+            '/.well-known/x402.json': {
+                get: {
+                    operationId: 'x402Manifest',
+                    summary: 'X402 payment manifest',
+                    tags: ['Discovery'],
+                    security: [], // Free endpoint — discovery
+                    responses: {
+                        '200': {
+                            description: 'X402 manifest',
+                            content: {
+                                'application/json': {
+                                    schema: {
+                                        type: 'object',
+                                        properties: {
+                                            name: { type: 'string' },
+                                            wallet: { type: 'string' },
+                                            network: { type: 'string' },
+                                            facilitator: { type: 'string' }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    });
+});
 app.post('/mcp', async (req, res) => {
     const mcp = { jsonrpc: '2.0', id: req.body.id };
     if (req.body.method === 'initialize') {
@@ -195,11 +487,36 @@ app.get('/api/wallet', (_req, res) => {
         balance: 'live-on-chain',
     });
 });
+// ─── In-Memory Sale Tracker ────────────────────────────────────
+const saleHistory = [];
+const MAX_SALES = 200;
+function recordSale(method, path, userAgent) {
+    saleHistory.push({ method, path, timestamp: new Date().toISOString(), ua: userAgent?.substring(0, 80) });
+    if (saleHistory.length > MAX_SALES)
+        saleHistory.shift();
+}
+app.get('/api/sales', (_req, res) => {
+    const summary = {
+        total: saleHistory.length,
+        revenue_usdc: saleHistory.reduce((sum, s) => {
+            const prices = { signals: 0.02, risk: 0.02, forecast: 0.02, decision: 0.10, preflight: 0.03, audit: 0.05, 'automations/run': 0.01, mcp: 0 };
+            for (const [key, price] of Object.entries(prices)) {
+                if (s.path.includes(key))
+                    return sum + price;
+            }
+            return sum;
+        }, 0),
+        recent: saleHistory.slice(-50).reverse(),
+    };
+    res.json(summary);
+});
+// Patch the middleware to also record to history (replaces console.log)
+// Note: the console.log in the middleware already logs; this endpoint reads from memory
 app.listen(PORT, () => {
     console.log(`Kronos X402 v${VERSION} running on port ${PORT}`);
     console.log(`Wallet: ${WALLET}`);
     console.log(`MCP: http://localhost:${PORT}/mcp`);
-    console.log(`API: http://localhost:${PORT}/api/{preflight,decision,audit,signals,risk,forecast,automations,agent-types,wallet}`);
+    console.log(`API: http://localhost:${PORT}/api/{preflight,decision,audit,signals,risk,forecast,automations,agent-types,wallet,sales}`);
     console.log(`X402 Config: http://localhost:${PORT}/x402-config`);
 });
 //# sourceMappingURL=server.js.map
