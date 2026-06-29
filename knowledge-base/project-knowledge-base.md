@@ -306,7 +306,37 @@ EOF
 
 ---
 
-## 9. Project File Structure
+## 9. MCP (Model Context Protocol)
+
+Kronos X402 exposes a free MCP endpoint at /mcp (POST, JSON-RPC 2.0).
+
+### MCP Tools
+| Tool | Description |
+|------|-------------|
+| check_trade_preflight | Pre-trade risk check |
+| get_crypto_decision | Full buy/sell/hold decision |
+| audit_trade_decision | Post-decision audit |
+| get_signals | Raw signal data |
+| get_risk | Risk assessment |
+| get_forecast | Price forecast |
+
+### Connecting Claude Desktop
+```json
+{
+  "mcpServers": {
+    "kronos": {
+      "transport": "sse",
+      "url": "https://kronos-x402.onrender.com/mcp"
+    }
+  }
+}
+```
+
+See full MCP + x402 documentation at https://docs.x402.org/guides/mcp-server-with-x402
+
+---
+
+## 10. Project File Structure
 
 ```
 kronos-x402/
