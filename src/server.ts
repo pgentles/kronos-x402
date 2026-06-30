@@ -11,7 +11,7 @@ const WALLET = process.env.WALLET_ADDRESS || '0x421C25445d6CF7B292933D743E698ed2
 const VERSION = '1.1.0';
 const USDC_BASE_MAINNET = '0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA';
 const BASE_NETWORK_CAIP2 = 'eip155:8453';
-const AMOUNT = '100000';
+const AMOUNT = '20000';
 
 app.use(cors());
 app.use(express.json({ limit: '256kb' }));
@@ -19,7 +19,14 @@ app.use(express.static('public'));
 
 // ─── X402 Protocol ─────────────────────────────────────────────
 app.use((req: Request, res: Response, next: any) => {
-  if (req.path === '/' || req.path === '/health' || req.path === '/x402-config' || req.path === '/.well-known/x402.json' || req.path === '/x402/discover' || req.path === '/x402' || req.path === '/x402/facilitate' || req.path === '/openapi.json' || req.path === '/favicon.ico') return next();
+  // Free paths: health, discovery, openapi, MCP initialize/tools/list
+  const freePaths = ['/', '/health', '/x402-config', '/.well-known/x402.json', '/x402/discover', '/x402', '/x402/facilitate', '/openapi.json', '/favicon.ico'];
+  
+  // Also allow MCP initialize and tools/list without payment
+  const isMcpFreeCall = req.path === '/mcp' && 
+    (req.body?.method === 'initialize' || req.body?.method === 'tools/list');
+  
+  if (freePaths.includes(req.path) || isMcpFreeCall) return next();
 
   const payment = req.headers['x402-payment'];
   if (!payment) {
@@ -30,7 +37,26 @@ app.use((req: Request, res: Response, next: any) => {
     res.set('X-Payment-Protocol', 'x402');
     res.set('X402-Payment', 'required');
     const resourceUrl = `https://${req.headers.host}${req.path}`;
+    
+    // Per x402 spec: provide TWO network requirements — "base" first, then "eip155:8453"
+    // Both with same asset, payTo, amount, resource, scheme: "exact"
     const accepts = [
+      {
+        scheme: 'exact',
+        network: 'base',
+        amount: AMOUNT,
+        asset: USDC_BASE_MAINNET,
+        payTo: WALLET,
+        maxTimeoutSeconds: 60,
+        resource: {
+          url: resourceUrl,
+          description: 'AI market intelligence — signals, risk, forecast',
+          mimeType: 'application/json',
+          serviceName: 'Kronos X402',
+          tags: ['crypto', 'market-intelligence', 'trading'],
+        },
+        extra: { name: 'USDC', version: '2' },
+      },
       {
         scheme: 'exact',
         network: BASE_NETWORK_CAIP2,
